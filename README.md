@@ -318,11 +318,27 @@ ext_pillar:
   - git:
     - master git@gitlab:organization/network_parameters.git
 ```
+```
+fileserver_backend:
+  - git
+  - roots
+```
+```
+gitfs_remotes:
+  - ssh://git@gitlab/organization/network_model.git
+```
+```
+file_roots:
+  base:
+    - /srv/salt
+    - /srv/local
 
+```
 So: 
 - the Salt master is listening webhooks on port 5001. It generates equivalents ZMQ messages to the event bus
 - runners are in the directory ```/srv/runners``` on the Salt master
 - pillars (humans defined variables) are in the gitlab repository ```organization/network_parameters``` 
+- the gitlab repository ```organization/network_model``` is a file server for SaltStack (sls files, templates, ...) 
 
 ### Update the Salt external pillars
 
