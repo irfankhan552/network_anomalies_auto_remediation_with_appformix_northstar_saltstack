@@ -276,6 +276,16 @@ Sensor Information :
 
 ```
 
+
+# Northstar 
+
+## Install Northstar (version 4 or above)  
+This is not covered by this documentation
+
+## Add the same network devices to Northstar  
+This is not covered by this documentation
+
+
 # Docker 
 
 
@@ -480,14 +490,6 @@ $ sudo -s
 # git push origin master
 # cd
 ```
-
-# Northstar 
-
-## Install Northstar (version 4 or above)  
-This is not covered by this documentation
-
-## Add the same network devices to Northstar  
-This is not covered by this documentation
 
 # SaltStack
 
