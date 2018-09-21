@@ -641,17 +641,14 @@ The runner that SaltStack will execute to make REST calls to northstar will use 
 
 #### Create the SaltStack runner
 
-As you can see in the Salt master configuration file ```/etc/salt/master```, the runners directory is ```/srv/runners/```.   
+As you can see in the [Salt master configuration file](master), the runners directory is ```/srv/runners/```.   
 
-The runner ```northstar``` is ```/srv/runners/northstar.py```  
-
-This runner defines a python function ```put_device_in_maintenance```.  
-The python function makes REST calls to Northstar SDN controller to put a device in maintenance mode.  
-
+This runner [northstar.py](runners/northstar.py) defines a python function ```put_device_in_maintenance```.  
+This python function makes REST calls to Northstar SDN controller to put a device in maintenance mode.  
 The device will be considered logically down for a certain amount time, and the SDN controller will reroute the LSPs around this device during the maintenance period.  
 After the maintenance period, LSPs are reverted back to optimal paths. 
 
-
+Run these commands to add this runner to your setup 
 ```
 # mkdir /srv/runners/
 # cp network_anomalies_auto_remediation_with_appformix_northstar_saltstack/runners/* /srv/runners/
@@ -659,7 +656,8 @@ After the maintenance period, LSPs are reverted back to optimal paths.
 
 #### Test the SaltStack runner 
 
-You can test manually the runner
+Run this command to test manually the runner (```core-rtr-p-02``` is a Junos device in Northstar) 
+
 ```
 salt-run northstar.put_device_in_maintenance dev=core-rtr-p-02
 ```
@@ -668,7 +666,18 @@ Then log in to the Northstar GUI and verify in the ```topology``` menu if the de
 
 
 
+### Configure SaltStack webhook engine
 
+Engines are executed in a separate process that is monitored by Salt. If a Salt engine stops, it is restarted automatically.  
+Engines can run on both master and minion.  To start an engine, you need to specify engine information in master/minion config file depending on where you want to run the engine. Once the engine configuration is added, start the master and minion normally. The engine should start along with the salt master/minion.   
+webhook engine listens to webhook, and generates and pusblishes messages on SaltStack 0MQ bus.  
+
+We already added the webhook engine configuration in the [master configuration file](master)  
+So Appformix should his webhook notifications to the master ip address on port 5001. 
+
+```
+# more /etc/salt/master
+```
 
 
 ### Update the Salt reactor
