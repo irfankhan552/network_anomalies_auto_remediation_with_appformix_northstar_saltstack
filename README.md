@@ -64,7 +64,7 @@
 
 ### SaltStack
 - Only the master is required, with a webhook engine. 
-- if you also want to use SaltStack to interract with Junos devices then you also need to install at leat one minion, and proxies (one proxy process per Junos device). Again, this is not mandatory for this setup. Only the master is required, with a webhook engine   
+    - if you also want to use SaltStack to interract with Junos devices then you also need to install at leat one minion, and proxies (one proxy process per Junos device). Again, this is not mandatory for this setup. Only the master is required, with a webhook engine   
 - The Salt master listens to webhooks 
 - The Salt master generates a ZMQ messages to the event bus when a webhook notification is received. The ZMQ message has a tag and data. The data structure is a dictionary, which contains information about the event.
 - The Salt reactor binds sls files to event tags. The reactor has a list of event tags to be matched, and each event tag has a list of reactor SLS files to be run. So these sls files define the SaltStack reactions.
@@ -401,12 +401,10 @@ Sign in with ```root``` and ```password```
 
 Create the group ```organization```.    
 
-Create in the group ```organization``` the repositories:
+Create in the group ```organization``` the repository:
    - ```network_parameters``` (Public, add Readme)
-   - ```network_model``` (Public, add Readme) 
 
 the repository ```network_parameters``` is used for SaltStack external pillars  
-the repository ```network_model``` is used as an external files server for SaltStack  
 
 ### Add your public key to Gitlab
 
@@ -466,7 +464,6 @@ Clone all the repositories:
 ```
 $ sudo -s
 # git clone git@gitlab_ip_address:organization/network_parameters.git
-# git clone git@gitlab_ip_address:organization/network_model.git
 # ls
 # cd network_parameters
 # git remote -v
@@ -484,139 +481,164 @@ $ sudo -s
 # cd
 ```
 
+# Northstar 
 
-
-## Northstar 
-
-### Install Northstar (version 4 or above)  
+## Install Northstar (version 4 or above)  
 This is not covered by this documentation
 
-### Add the same network devices to Northstar  
+## Add the same network devices to Northstar  
 This is not covered by this documentation
 
-## Gitlab
+# SaltStack
 
-This SaltStack setup uses a gitlab server for external pillars and as a remote file server.  
+## Install SaltStack 
 
-### Install Gitlab
+Only the master is required, with a webhook engine.  
+if you also want to use SaltStack to interract with Junos devices then you also need to install at least one minion, and proxies (one proxy process per Junos device). Again, this is not mandatory for this setup. Only the master is required, with a webhook engine   
 
-There is a Gitlab docker image available https://hub.docker.com/r/gitlab/gitlab-ce/
+### Install SaltStack master 
 
-You first need to install docker. This step is not covered by this documentation.  
-
-Then:  
-
-Pull the image: 
+Check if SaltStack master is already installed
 ```
-# docker pull gitlab/gitlab-ce
+$ sudo -s
 ```
-
-Verify: 
 ```
-# docker images
-REPOSITORY                   TAG                 IMAGE ID            CREATED             SIZE
-gitlab/gitlab-ce             latest              09b815498cc6        6 months ago        1.33GB
+# salt --version
 ```
-
-Instanciate a container: 
 ```
-docker run -d --rm --name gitlab -p 9080:80 gitlab/gitlab-ce
+# salt-master --version
 ```
-Verify:
+if SaltStack master was not already installed, then install it: 
 ```
-# docker ps
-CONTAINER ID        IMAGE                        COMMAND                  CREATED             STATUS                PORTS                                                 NAMES
-9e8330425d9c        gitlab/gitlab-ce             "/assets/wrapper"        5 months ago        Up 5 days (healthy)   443/tcp, 0.0.0.0:3022->22/tcp, 0.0.0.0:9080->80/tcp   gitlab
+$ sudo -s
 ```
-
-### Configure Gitlab
-
-Create the organization ```organization```.    
-Create the repositories ```network_parameters``` and ```network_model``` in the organization ```organization```.      
-The repository ```network_parameters``` is used for SaltStack external pillars.    
-The repository ```network_model``` is used as an external file server for SaltStack   
-
-
-
-## SaltStack
-
-### Install SaltStack
-This is not covered by this documentation
-
-### Configure the Salt master configuration file
-
-ssh to the Salt master and edit the salt master configuration file:  
 ```
-vi /etc/salt/master
+# wget -O - https://repo.saltstack.com/apt/ubuntu/16.04/amd64/archive/2018.3.2/SALTSTACK-GPG-KEY.pub | sudo apt-key add -
+```
+Add ```deb http://repo.saltstack.com/apt/ubuntu/16.04/amd64/archive/2018.3.2 xenial main``` in the file ```/etc/apt/sources.list.d/saltstack.list```
+```
+# touch /etc/apt/sources.list.d/saltstack.list
+```
+```
+# nano /etc/apt/sources.list.d/saltstack.list
+```
+```
+# more /etc/apt/sources.list.d/saltstack.list
+deb http://repo.saltstack.com/apt/ubuntu/16.04/amd64/archive/2018.3.2 xenial main
+```
+```
+# sudo apt-get update
+```
+```
+# sudo apt-get install salt-master
+```
+Verify you installed properly SaltStack master 
+```
+# salt --version
+salt 2018.3.2 (Oxygen)
+```
+```
+# salt-master --version
+salt-master 2018.3.2 (Oxygen)
 ```
 
-Make sure the master configuration file has these details:  
-```
-runner_dirs:
-  - /srv/runners
-```
-```
-engines:
-  - webhook:
-      port: 5001
-```
-```
-ext_pillar:
-  - git:
-    - master git@gitlab:organization/network_parameters.git
-```
-```
-fileserver_backend:
-  - git
-  - roots
-```
-```
-gitfs_remotes:
-  - ssh://git@gitlab/organization/network_model.git
-```
-```
-file_roots:
-  base:
-    - /srv/salt
-    - /srv/local
+## Configure SaltStack
+
+- Configure SaltStack master
+- Configure SaltStack pillars
+- Configure SaltStack runners 
+- Configure SaltStack webhook engine 
+- Configure SaltStack reactor
+
+### Configure SaltStack master
+
+#### SaltStack master configuration file
+
+ssh to the Salt master and copy this [SaltStack master configuration file](master) in the file ```/etc/salt/master```  
 
 ```
-So: 
+cp network_anomalies_auto_remediation_with_appformix_northstar_saltstack/master /etc/salt/master
+more /etc/salt/master
+```
+So:
 - the Salt master is listening webhooks on port 5001. It generates equivalents ZMQ messages to the event bus
+- external pillars are in the gitlab repository ```organization/network_parameters```  (master branch)
 - runners are in the directory ```/srv/runners``` on the Salt master
-- pillars (humans defined variables) are in the gitlab repository ```organization/network_parameters``` 
-- the gitlab repository ```organization/network_model``` is a file server for SaltStack (sls files, templates, ...) 
 
-### Update the Salt external pillars
 
-Create a file ```northstar.sls``` at the root of the  external pillars gitlab repository ```organization/network_parameters``` with this content: 
+#### Restart the salt-master service
+
 ```
-northstar: 
-    authuser: 'admin'
-    authpwd: 'juniper123'
-    url: 'https://192.168.128.173:8443/oauth2/token'
-    url_base: 'http://192.168.128.173:8091/NorthStar/API/v2/tenant/'
-    maintenance_event_duration: 60
+# service salt-master restart
+```
+#### Verify the salt-master status
+
+To see the Salt processes: 
+```
+# ps -ef | grep salt
+```
+To check the status, you can run these commands: 
+```
+# systemctl status salt-master.service
+```
+```
+# service salt-master status
+```
+#### SaltStack master log
+
+```
+# more /var/log/salt/master 
+```
+```
+# tail -f /var/log/salt/master
+```
+
+
+
+### Configure SaltStack pillars
+
+Pillars are variables     
+They are defined in sls files, with a yaml data structure.  
+There is a ```top``` file.  
+The ```top.sls``` file map minions to sls (pillars) files.  
+
+#### Pillar configuration
+
+Refer to the [master configuration file](master) to know the location for pillars. 
+```
+more /etc/salt/master
+``` 
+So it is the repository ```network_parameters```  
+Run these commands to add the [pillars](pillars) at the root of the repository ```network_parameters```: 
+
+```
+# cp network_anomalies_auto_remediation_with_appformix_northstar_saltstack/pillars/* network_parameters/
+# ls network_parameters/
+# cd network_parameters
+# git status
+# git add .
+# git status
+# git commit -m "add pillars"
+# git push origin master
+# cd
+```
+
+
+#### Pillars configuration verification
+
+```
+$ sudo -s
+```
+```
+# salt-run pillar.show_pillar
+```
+The file [pillars/northstar.sls](northstar.sls) has the variables for Northstar. 
+```
+more network_parameters/northstar.sls
 ```
 The runner that SaltStack will execute to make REST calls to northstar will use these variables.  
 
 
-For the ```northstar.sls``` file to be actually used, update the ```top.sls``` file at the root of the gitlab repository ```organization/network_parameters```.  
-Example:  
-```
-{% set id = salt['grains.get']('id') %} 
-{% set host = salt['grains.get']('host') %} 
-
-base:
-  '*':
-    - production
-    - northstar
-
-{% if host == '' %}
-  '{{ id }}':
-    - {{ id }}
-{% endif %}
-```
 
 
 ### Update the Salt reactor
