@@ -1,7 +1,20 @@
-# Demo overview:  
+# Documentation structure
+
+[About the demo](#about-the-demo)  
+[Requirements to run the demo](#requirements-to-run-the-demo)  
+[Appformix](#appformix-1)  
+[Northstar](#northstar)
+[Docker](#docker)  
+[Gitlab](#gitlab-1)  
+[SaltStack](#saltstack-1)  
+[Run the demo](#run-the-demo)  
+
+# About the demo 
+
+## Demo overview 
 
 - Appformix is used for network devices monitoring (SNMP and telemetry).  
-- Appformix send webhook notifications to Salt master 
+- Appformix send webhook notifications to Salt master. The webhook notifications provides the device name and other details.   
 - SaltStack automatically makes REST calls to Northstar SDN controller to put the "faulty" device in maintenance mode.  
     - The "faulty" device will be considered logically down for a certain amount time, and the SDN controller will reroute the
     LSPs around this device during the maintenance period.  
@@ -10,59 +23,80 @@
 ![unplanned-maintenance-operations.png](resources/unplanned-maintenance-operations.png)  
 
 
-# Demo building blocks: 
+## webhooks Overview 
 
-- Juniper devices
-- Northstar SDN controller. Version 4 or above is required
-- Appformix
-- SaltStack
-
-# webhooks overview: 
-
-- A webhook is notification using an HTTP POST. A webhook is sent by a system A to push data (json body as example) to a system B when an event occurred in the system A. Then the system B will decide what to do with these details.  
+- A webhook is notification using an HTTP POST. A webhook is sent by a system A to push data (json body as example) to a system B when an event occurred in the system A. Then the system B will decide what to do with these details. 
 - Appformix supports webhooks. A notification is generated when the condition of an alarm is observed. You can configure an alarm to post notifications to an external HTTP endpoint. AppFormix will post a JSON payload to the endpoint for each notification.
 - SaltStack can listens to webhooks and generate equivalents ZMQ messages to the event bus  
-- SaltStack can reacts to webhooks 
+- SaltStack can reacts to webhooks
 
-# Building blocks role: 
 
-## Appformix:  
-- Collects data from Junos devices.
-- Generates webhooks notifications (HTTP POST with a JSON body) to SaltStack when the condition of an alarm is observed. The JSON body provides the device name and other details. 
+## Demo building blocks
+- Junos devices
+- Northstar SDN controller. Version 4 or above is required
+- Appformix
+- Ubuntu with: 
+    - SaltStack
+    - Docker
+    - Gitlab
 
-## SaltStack: 
-- Only the master is required.   
-- Listens to webhooks 
-- Generates a ZMQ messages to the event bus when a webhook notification is received. The ZMQ message has a tag and data. The data structure is a dictionary, which contains information about the event.
-- The reactor binds sls files to event tags. The reactor has a list of event tags to be matched, and each event tag has a list of reactor SLS files to be run. So these sls files define the SaltStack reactions. 
+
+## Building blocks role 
+
+### Appformix
+- Collects data from Junos devices (JTI native telemetry and SNMP)  
+- Generates webhooks notifications (HTTP POST with a JSON body) to SaltStack when the condition of an alarm is observed. The JSON body provides the device name and other details
+
+
+### Junos devices 
+- Several Junos devices. 
+- They are monitored by Appformix
+- They are configured by SaltStack based on Appformix webhook notifications. 
+
+### Ubuntu
+- with Docker and SaltStack installed.  
+- A Gitlab docker container is instanciated.  
+
+### Gitlab  
+- This SaltStack setup uses a gitlab server for external pillars (variables)
+- This SaltStack setup uses a gitlab server as a remote files server 
+
+
+### SaltStack
+- Only the master is required, with a webhook engine. 
+- if you also want to use SaltStack to interract with Junos devices then you also need to install at leat one minion, and proxies (one proxy process per Junos device). Again, this is not mandatory for this setup. Only the master is required, with a webhook engine   
+- The Salt master listens to webhooks 
+- The Salt master generates a ZMQ messages to the event bus when a webhook notification is received. The ZMQ message has a tag and data. The data structure is a dictionary, which contains information about the event.
+- The Salt reactor binds sls files to event tags. The reactor has a list of event tags to be matched, and each event tag has a list of reactor SLS files to be run. So these sls files define the SaltStack reactions.
 - The reactor sls file used in this content does the following: 
     - It parses the data from the ZMQ message and extracts the network device name. 
-    - It then passes the data extracted the ZMQ message to a runner and execute the runner. The runner makes REST calls to Northstar SDN controller to put the "faulty" device in maintenance mode. 
+    - It then passes the data extracted from the ZMQ message to a runner (python code on the master) and executes the runner. The runner makes REST calls to Northstar SDN controller to put the "faulty" device in maintenance mode. 
 
-## Gitlab  
-- This SaltStack setup uses a gitlab server for external pillars (variables) and as a remote file server (templates, sls files, ...).  
-
-## Northstar: 
+### Northstar 
 - Handle the REST calls received by SaltStack, i.e put the "faulty" device in maintenance mode. 
     - The "faulty" device will be considered logically down for a certain amount time, and Northstar will reroute the LSPs around this device during the maintenance period. 
     - After the maintenance period, LSPs are reverted back to optimal paths. 
 
-# Requirements: 
 
+
+
+# Requirements to run the demo 
 - Install appformix
 - Configure appformix for network devices monitoring
 - Install northstar (version 4 or above)
 - Add the same network devices to northstar 
+- Install Docker 
+- Instanciate a Gitlab docker container
+- Configure Gitlab
 - Install SaltStack
+- Configure SaltStack
 
-# Prepare the demo: 
+# Appformix  
 
-## Appformix  
+## Install Appformix. 
+This is not covered by this documentation.  
 
-### Install Appformix. 
-This is not covered by this documentation
-
-### Configure Appformix for network devices monitoring 
+## Configure Appformix for network devices monitoring 
 
 Appformix supports network devices monitoring using SNMP and JTI (Juniper Telemetry Interface) native streaming telemetry.  
 - For SNMP, the polling interval is 60s.  
@@ -112,10 +146,12 @@ Then, from your appformix directory, re-run the 'Appformix installation Ansible 
 cd appformix-2.15.2/
 ansible-playbook -i inventory appformix_standalone.yml
 ```
-### Configure the network devices with the SNMP community used by Appformix
+## Configure the network devices with the SNMP community used by Appformix
 
 You need to configure the network devices with the SNMP community used by Appformix. The script [**snmp.py**](configure_junos/snmp.py) renders the template [**snmp.j2**](configure_junos/snmp.j2) using the variables [**network_devices.yml**](configure_appformix/network_devices.yml). The rendered file is [**snmp.conf**](configure_junos/snmp.conf). This file is then loaded and committed on all network devices used with SNMP monitoring.
  
+Requirement: This script uses the junos-eznc python library so you need first to install it.  
+
 ```
 python configure_junos/snmp.py
 configured device 172.30.52.85 with snmp community public
@@ -125,7 +161,7 @@ configured device 172.30.52.86 with snmp community public
 more configure_junos/snmp.conf
 ```
 
-### Configure the network devices for JTI telemetry
+## Configure the network devices for JTI telemetry
 
 For JTI native streaming telemetry, Appformix uses NETCONF to automatically configure the network devices:  
 ```
@@ -180,6 +216,8 @@ The python script [**telemetry.py**](configure_junos/telemetry.py) renders the t
 ```
 more configure_appformix/network_devices.yml
 ```
+Requirement: This script uses the junos-eznc python library so you need first to install it.  
+
 ```
 python configure_junos/telemetry.py
 configured device 172.30.52.155 with telemetry server ip 192.168.1.100
@@ -237,6 +275,215 @@ Sensor Information :
         Forwarding-class                    : 255
 
 ```
+
+# Docker 
+
+
+Check if Docker is already installed
+```
+$ docker --version
+```
+
+If it was not already installed, install it:
+```
+$ sudo apt-get update
+```
+```
+$ sudo apt-get install \
+    apt-transport-https \
+    ca-certificates \
+    curl \
+    software-properties-common
+```
+```
+$ curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+```
+```
+$ sudo add-apt-repository \
+   "deb [arch=amd64] https://download.docker.com/linux/ubuntu \
+   $(lsb_release -cs) \
+   stable"
+```
+```
+$ sudo apt-get update
+```
+```
+$ sudo apt-get install docker-ce
+```
+```
+$ sudo docker run hello-world
+```
+```
+$ sudo groupadd docker
+```
+```
+$ sudo usermod -aG docker $USER
+```
+
+Exit the ssh session and open an new ssh session and run these commands to verify you installed Docker properly:  
+```
+$ docker run hello-world
+
+Hello from Docker!
+This message shows that your installation appears to be working correctly.
+
+To generate this message, Docker took the following steps:
+ 1. The Docker client contacted the Docker daemon.
+ 2. The Docker daemon pulled the "hello-world" image from the Docker Hub.
+    (amd64)
+ 3. The Docker daemon created a new container from that image which runs the
+    executable that produces the output you are currently reading.
+ 4. The Docker daemon streamed that output to the Docker client, which sent it
+    to your terminal.
+
+To try something more ambitious, you can run an Ubuntu container with:
+ $ docker run -it ubuntu bash
+
+Share images, automate workflows, and more with a free Docker ID:
+ https://hub.docker.com/
+
+For more examples and ideas, visit:
+ https://docs.docker.com/engine/userguide/
+```
+```
+$ docker --version
+Docker version 18.03.1-ce, build 9ee9f40
+```
+
+# Gitlab
+
+This SaltStack setup uses a gitlab server for external pillars and as a remote file server.  
+
+## Instanciate a Gitlab docker container
+
+
+There is a Gitlab docker image available https://hub.docker.com/r/gitlab/gitlab-ce/
+
+
+Pull the image: 
+```
+# docker pull gitlab/gitlab-ce
+```
+
+Verify: 
+```
+# docker images
+REPOSITORY                   TAG                 IMAGE ID            CREATED             SIZE
+gitlab/gitlab-ce             latest              09b815498cc6        6 months ago        1.33GB
+```
+
+Instanciate a container: 
+```
+docker run -d --rm --name gitlab -p 3022:22 -p 9080:80 gitlab/gitlab-ce
+```
+Verify:
+```
+# docker ps
+CONTAINER ID        IMAGE                        COMMAND                  CREATED             STATUS                PORTS                                                 NAMES
+9e8330425d9c        gitlab/gitlab-ce             "/assets/wrapper"        5 months ago        Up 5 days (healthy)   443/tcp, 0.0.0.0:3022->22/tcp, 0.0.0.0:9080->80/tcp   gitlab
+```
+
+Wait for Gitlab container status to be ```healthy```. It takes about 2 mns.   
+```
+$ watch -n 10 'docker ps'
+```
+
+Verify you can access to Gitlab GUI:  
+Access Gitlab GUI with a browser on port 9080.  
+http://gitlab_ip_address:9080  
+Gitlab user is ```root```    
+Create a password ```password```  
+Sign in with ```root``` and ```password```    
+
+## Configure Gitlab
+
+### Create repositories
+
+Create the group ```organization```.    
+
+Create in the group ```organization``` the repositories:
+   - ```network_parameters``` (Public, add Readme)
+   - ```network_model``` (Public, add Readme) 
+
+the repository ```network_parameters``` is used for SaltStack external pillars  
+the repository ```network_model``` is used as an external files server for SaltStack  
+
+### Add your public key to Gitlab
+
+The Ubuntu host will inteact with the Gitlab server. 
+
+#### Generate ssh keys
+```
+$ sudo -s
+```
+```
+# ssh-keygen -f /root/.ssh/id_rsa -t rsa -N ''
+```
+```
+# ls /root/.ssh/
+id_rsa  id_rsa.pub  
+```
+#### Add the public key to Gitlab  
+Copy the public key:
+```
+# more /root/.ssh/id_rsa.pub
+```
+Access Gitlab GUI, and add the public key to ```User Settings``` > ```SSH Keys```
+
+### Update your ssh configuration
+```
+$ sudo -s
+```
+```
+# touch /root/.ssh/config
+```
+```
+# ls /root/.ssh/
+config       id_rsa       id_rsa.pub  
+```
+```
+# vi /root/.ssh/config
+```
+```
+# more /root/.ssh/config
+Host gitlab_ip_address
+Port 3022
+Host *
+Port 22
+```
+
+### Configure your Git client
+
+```
+$ sudo -s
+# git config --global user.email "you@example.com"
+# git config --global user.name "Your Name"
+```
+
+### Verify you can use Git and Gitlab
+
+Clone all the repositories:
+```
+$ sudo -s
+# git clone git@gitlab_ip_address:organization/network_parameters.git
+# git clone git@gitlab_ip_address:organization/network_model.git
+# ls
+# cd network_parameters
+# git remote -v
+# git branch 
+# ls
+# vi README.md
+# git status
+# git diff README.md
+# git add README.md
+# git status
+# git commit -m 'first commit'
+# git log --oneline
+# git log
+# git push origin master
+# cd
+```
+
 
 
 ## Northstar 
