@@ -64,7 +64,7 @@
 
 ### SaltStack
 - Only the master is required, with a webhook engine. 
-    - if you also want to use SaltStack to interract with Junos devices then you also need to install at leat one minion, and proxies (one proxy process per Junos device). Again, this is not mandatory for this setup. Only the master is required, with a webhook engine   
+    - if you also want to use SaltStack to interact with Junos devices then you also need to install at leat one minion, and proxies (one proxy process per Junos device). Again, this is not mandatory for this setup. Only the master is required, with a webhook engine   
 - The Salt master listens to webhooks 
 - The Salt master generates a ZMQ messages to the event bus when a webhook notification is received. The ZMQ message has a tag and data. The data structure is a dictionary, which contains information about the event.
 - The Salt reactor binds sls files to event tags. The reactor has a list of event tags to be matched, and each event tag has a list of reactor SLS files to be run. So these sls files define the SaltStack reactions.
@@ -491,12 +491,10 @@ This is not covered by this documentation
 
 # SaltStack
 
-## Install SaltStack 
+## Install SaltStack master
 
 Only the master is required, with a webhook engine.  
 if you also want to use SaltStack to interract with Junos devices then you also need to install at least one minion, and proxies (one proxy process per Junos device). Again, this is not mandatory for this setup. Only the master is required, with a webhook engine   
-
-### Install SaltStack master 
 
 Check if SaltStack master is already installed
 ```
@@ -639,6 +637,38 @@ more network_parameters/northstar.sls
 The runner that SaltStack will execute to make REST calls to northstar will use these variables.  
 
 
+### Configure SaltStack runners 
+
+#### Create the SaltStack runner
+
+As you can see in the Salt master configuration file ```/etc/salt/master```, the runners directory is ```/srv/runners/```.   
+
+The runner ```northstar``` is ```/srv/runners/northstar.py```  
+
+This runner defines a python function ```put_device_in_maintenance```.  
+The python function makes REST calls to Northstar SDN controller to put a device in maintenance mode.  
+
+The device will be considered logically down for a certain amount time, and the SDN controller will reroute the LSPs around this device during the maintenance period.  
+After the maintenance period, LSPs are reverted back to optimal paths. 
+
+
+```
+# mkdir /srv/runners/
+# cp network_anomalies_auto_remediation_with_appformix_northstar_saltstack/runners/* /srv/runners/
+```
+
+#### Test the SaltStack runner 
+
+You can test manually the runner
+```
+salt-run northstar.put_device_in_maintenance dev=core-rtr-p-02
+```
+
+Then log in to the Northstar GUI and verify in the ```topology``` menu if the device ```core-rtr-p-02``` is in maintenance. 
+
+
+
+
 
 
 ### Update the Salt reactor
@@ -691,74 +721,6 @@ test_event:
     - args:
        - dev: {{ devicename }}
 ```
-
-### Create the Salt runner
-
-As you can see in the Salt master configuration file ```/etc/salt/master```, the runners directory is ```/srv/runners/```.   
-So the runner ```northstar``` is ```/srv/runners/northstar.py```  
-
-This runner defines a python function ```put_device_in_maintenance```.  
-The python function makes REST calls to Northstar SDN controller to put a device in maintenance mode.  
-
-The device will be considered logically down for a certain amount time, and the SDN controller will reroute the LSPs around this device during the maintenance period.  
-After the maintenance period, LSPs are reverted back to optimal paths. 
-
-```
-# more /srv/runners/northstar.py
-from datetime import timedelta, datetime
-import requests
-from requests.packages.urllib3.exceptions import InsecureRequestWarning
-from requests.auth import HTTPBasicAuth
-from pprint import pprint
-import yaml
-import json
-import salt.client
-import salt.config
-import salt.runner
-
-def put_device_in_maintenance(dev):
- opts = salt.config.master_config('/etc/salt/master')
- caller = salt.client.Caller()
- local_minion_id = caller.cmd('grains.get', 'id')
- runner = salt.runner.RunnerClient(opts)
- pillar = runner.cmd('pillar.show_pillar', [local_minion_id])
- url = pillar['northstar']['url']
- maintenance_event_duration = pillar['northstar']['maintenance_event_duration']
- url_base = pillar['northstar']['url_base']
- authuser = pillar['northstar']['authuser']
- authpwd = pillar['northstar']['authpwd']
- requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
- headers = { 'content-type' : 'application/json'}
- data_to_get_token = {"grant_type":"password","username":authuser,"password":authpwd}
- r = requests.post(url, data=json.dumps(data_to_get_token), auth=(authuser, authpwd), headers=headers, verify=False)
- headers = {'Authorization':str('Bearer ' + r.json()['access_token']), 'Accept' : 'application/json', 'Content-Type' : 'application/json'}
- url = url_base + '1/topology/1/nodes'
- r = requests.get(url, headers=headers, verify=False)
- for i in r.json():
-   if i['hostName'] == dev:
-    node_index = i['nodeIndex']
- maintenance_url = url_base + '1/topology/1/maintenances'
- maintenance_data = {
-     "topoObjectType": "maintenance",
-     "topologyIndex": 1,
-     "user": "admin",
-     "name": "event_" + dev,
-     "startTime": datetime.now().isoformat(),
-     "endTime": (datetime.now() + timedelta(minutes=maintenance_event_duration)).isoformat(),
-     "elements": [{"topoObjectType": "node", "index": node_index}]
-     }
- m_res = requests.post(maintenance_url, data=json.dumps(maintenance_data), headers=headers, verify=False)
- return "done"
-```
-
-You can test manually the runner.  
-```
-salt-run northstar.put_device_in_maintenance dev=core-rtr-p-02
-```
-
-Then log in to the Northstar GUI and verify in the ```topology``` menu if the device ```core-rtr-p-02``` is in maintenance. 
-
-
 
 # Run the demo: 
 
