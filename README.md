@@ -632,7 +632,7 @@ $ sudo -s
 ```
 # salt-run pillar.show_pillar
 ```
-The file [pillars/northstar.sls](northstar.sls) has the variables for Northstar. 
+The file [northstar.sls](pillars/northstar.sls) has the variables for Northstar. 
 ```
 more network_parameters/northstar.sls
 ```
