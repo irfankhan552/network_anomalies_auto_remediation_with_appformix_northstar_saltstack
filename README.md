@@ -3,7 +3,7 @@
 [About the demo](#about-the-demo)  
 [Requirements to run the demo](#requirements-to-run-the-demo)  
 [Appformix](#appformix-1)  
-[Northstar](#northstar)  
+[Northstar](#northstar-1)  
 [Docker](#docker)  
 [Gitlab](#gitlab-1)  
 [SaltStack](#saltstack-1)  
