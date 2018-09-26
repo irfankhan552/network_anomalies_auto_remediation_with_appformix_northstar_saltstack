@@ -494,19 +494,6 @@ $ sudo -s
 
 ## Install SaltStack master
 
-if you also want to use SaltStack to interract with Junos devices then you also need to install at least one minion, and proxies (one proxy process per Junos device). Again, this is not mandatory for this setup. Only the master is required, with a webhook engine   
-
-Check if SaltStack master is already installed
-```
-$ sudo -s
-```
-```
-# salt --version
-```
-```
-# salt-master --version
-```
-if SaltStack master was not already installed, then install it: 
 ```
 $ sudo -s
 ```
@@ -747,51 +734,30 @@ So Appformix should his webhook notifications to the master ip address on port 5
 The reactor binds sls files to event tags.  
 The reactor has a list of event tags to be matched, and each event tag has a list of reactor SLS files to be run.  
 So these sls files define the SaltStack reactions.  
-This reactor binds ```salt/engines/hook/appformix_to_saltstack``` event to this file ```/srv/reactor/northstar_maintenance.sls``` 
 
 ```
-# more /etc/salt/master.d/reactor.conf
-reactor:
-   - 'salt/engines/hook/appformix_to_saltstack':
-       - /srv/reactor/northstar_maintenance.sls
-
+cp network_anomalies_auto_remediation_with_appformix_northstar_saltstack/reactor.conf /etc/salt/master.d/
+more /etc/salt/master.d/reactor.conf
 ```
-
+This reactor binds ```salt/engines/hook/appformix_to_saltstack``` event to this file ```/srv/reactor/northstar_maintenance.sls```   
 Restart the Salt master:
-```
-service salt-master stop
-service salt-master start
-```
 
+```
+serv salt-master restart
+salt-run reactor.list
+```
 The command ```salt-run reactor.list``` lists currently configured reactors:  
 ```
 salt-run reactor.list
-event:
-    ----------
-    _stamp:
-        2018-04-10T13:40:12.062140
-suffix:
-    salt/reactors/manage/list
-|_
-  ----------
-  salt/engines/hook/appformix_to_saltstack:
-      - /srv/reactor/northstar_maintenance.sls
 ```
 
-### Create the reactor sls file 
-
-- The sls reactor file ```/srv/reactor/northstar_maintenance.sls``` parses the data from the ZMQ message that has the tags ```salt/engines/hook/appformix_to_saltstack``` and extracts the network device name.  
-- It then passes the data extracted the ZMQ message to the python function ```put_device_in_maintenance``` of the ```northstar``` runner and execute the python function. 
-
 ```
-# more /srv/reactor/northstar_maintenance.sls
-{% set body_json = data['body']|load_json %}
-{% set devicename = body_json['status']['entityId'] %}
-test_event:
-  runner.northstar.put_device_in_maintenance:
-    - args:
-       - dev: {{ devicename }}
+mkdir /srv/reactor/
+cp network_anomalies_auto_remediation_with_appformix_northstar_saltstack/reactor/* /srv/reactor/
+ls /srv/reactor/
+more /srv/reactor/northstar_maintenance.sls
 ```
+This sls reactor file parses the data from the ZMQ message that has the tags ```salt/engines/hook/appformix_to_saltstack``` and extracts the network device name.  It then passes the data extracted the ZMQ message to the python function ```put_device_in_maintenance``` of the ```northstar``` runner and execute the python function. 
 
 # Run the demo: 
 
@@ -842,95 +808,16 @@ Salt provides a runner that displays events in real-time as they are received on
 
 ## Trigger an alarm  to get a webhook notification sent by Appformix to SaltStack 
 
-Either you DIY, or, depending on the alarms you set, you can use one the automation content available in the directory [trigger_alarms](trigger_alarms).  
+DIY 
 
-### Requirement to use the automation content available in the directory [trigger_alarms](trigger_alarms)
+## Verify
 
-There is a SaltStack requirement to use the automation content available in the directory [trigger_alarms](trigger_alarms). You first need to install on the master or on a minion the dependencies to use a SaltStack proxy for Junos. And then you need to start one junos proxy daemon per device. These details are not covered by this documentation.  
+### On SaltStack 
 
-Here's how to use the automation content available in the directory [trigger_aarms](trigger_alarms).  
+- Have a look at the tcpdump output 
+- Have a look at the the ZMQ messages  
 
-### generate traffic between 2 routers 
-Add the file [generate_traffic.sls](trigger_alarms/generate_traffic.sls) to the directory ```junos``` of the gitlab repository ```organization/network_model``` (```gitfs_remotes```).  
-
-And run this command on the master:   
-```
-# salt "core-rtr-p-02" state.apply junos.generate_traffic
-```
-### Change interface speed on a router
-
-Add the file [change_int_speed.sls](trigger_alarms/change_int_speed.sls) to the directory ```junos``` of the gitlab repository ```organization/network_model``` (```gitfs_remotes```).  
-Add the file [speed.set](trigger_alarms/speed.set) to the directory ```template``` of the gitlab repository ```organization/network_model``` (```gitfs_remotes```).    
-Run this command on the master:   
-```
-# salt "core-rtr-p-02" state.apply junos.change_int_speed
-# salt "core-rtr-p-02" junos.cli "show system commit"
-# salt "core-rtr-p-02" junos.cli "show configuration | compare rollback 1"
-# salt "core-rtr-p-02" junos.cli "show configuration interfaces ge-0/0/1"
-```
-
-### Change MTU on a router
-
-Add the file [change_mtu.sls](trigger_alarms/change_mtu.sls) to the directory ```junos``` of the gitlab repository ```organization/network_model``` (```gitfs_remotes```).  
-Add the file [mtu.set](trigger_alarms/mtu.set) to the directory ```template``` of the gitlab repository ```organization/network_model``` (```gitfs_remotes```).    
-Run this command on the master:   
-```
-# salt "core-rtr-p-02" state.apply junos.change_mtu
-# salt "core-rtr-p-02" junos.cli "show system commit"
-# salt "core-rtr-p-02" junos.cli "show configuration | compare rollback 1"
-# salt "core-rtr-p-02" junos.cli "show configuration interfaces ge-0/0/1"
-```
-
-## Verify on SaltStack 
-
-Have a look at the tcpdump output 
-
-Have a look at the the ZMQ messages
-
-```
-# salt-run state.event pretty=True
-salt/engines/hook/appformix_to_saltstack        {
-    "_stamp": "2018-04-06T16:43:39.866009",
-    "body": "{\"status\": {\"description\": \"NetworkDevice core-rtr-p-02: average ifInUcastPkts above 300 {u'ge-0/0/4_0': {u'sample_value': 15.48, u'status': u'inactive'}, u'demux0': {u'sample_value': 0, u'status': u'inactive'}, u'ge-0/0/5': {u'sample_value': 0, u'status': u'inactive'}, u'ge-0/0/4': {u'sample_value': 15.48, u'status': u'inactive'}, u'ge-0/0/3': {u'sample_value': 0, u'status': u'inactive'}, u'ge-0/0/2': {u'sample_value': 0, u'status': u'inactive'}, u'ge-0/0/1': {u'sample_value': 17.78, u'status': u'active'}, u'ge-0/0/0': {u'sample_value': 0, u'status': u'inactive'}, u'pfe-0/0/0_16383': {u'sample_value': 0, u'status': u'inactive'}, u'ge-0/0/9': {u'sample_value': 0, u'status': u'inactive'}, u'ge-0/0/8': {u'sample_value': 0, u'status': u'inactive'}, u'fxp0_0': {u'sample_value': 98.63, u'status': u'inactive'}, u'tap': {u'sample_value': 0, u'status': u'inactive'}, u'em1_0': {u'sample_value': 844.7, u'status': u'active'}, u'pfh-0/0/0_16384': {u'sample_value': 0, u'status': u'inactive'}, u'pip0': {u'sample_value': 0, u'status': u'inactive'}, u'pimd': {u'sample_value': 0, u'status': u'inactive'}, u'mtun': {u'sample_value': 0, u'status': u'inactive'}, u'gre': {u'sample_value': 0, u'status': u'inactive'}, u'em1': {u'sample_value': 844.7, u'status': u'active'}, u'em2': {u'sample_value': 0, u'status': u'inactive'}, u'lc-0/0/0': {u'sample_value': 0, u'status': u'inactive'}, u'irb': {u'sample_value': 0, u'status': u'inactive'}, u'lo0_16385': {u'sample_value': 47.6, u'status': u'inactive'}, u'dsc': {u'sample_value': 0, u'status': u'inactive'}, u'fxp0': {u'sample_value': 98.63, u'status': u'inactive'}, u'vtep': {u'sample_value': 0, u'status': u'inactive'}, u'cbp0': {u'sample_value': 0, u'status': u'inactive'}, u'jsrv': {u'sample_value': 0, u'status': u'inactive'}, u'rbeb': {u'sample_value': 0, u'status': u'inactive'}, u'lo0_0': {u'sample_value': 0, u'status': u'inactive'}, u'ge-0/0/7': {u'sample_value': 0, u'status': u'inactive'}, u'pp0': {u'sample_value': 0, u'status': u'inactive'}, u'pfh-0/0/0': {u'sample_value': 0, u'status': u'inactive'}, u'pfe-0/0/0': {u'sample_value': 0, u'status': u'inactive'}, u'lsi': {u'sample_value': 0, u'status': u'inactive'}, u'pfh-0/0/0_16383': {u'sample_value': 0, u'status': u'inactive'}, u'ge-0/0/1_0': {u'sample_value': 17.78, u'status': u'active'}, u'lc-0/0/0_32769': {u'sample_value': 0, u'status': u'inactive'}, u'NetworkDeviceId': u'core-rtr-p-02', u'ipip': {u'sample_value': 0, u'status': u'inactive'}, u'lo0_16384': {u'sample_value': 0, u'status': u'inactive'}, u'ge-0/0/6': {u'sample_value': 0, u'status': u'inactive'}, u'lo0': {u'sample_value': 47.6, u'status': u'inactive'}, u'pime': {u'sample_value': 0, u'status': u'inactive'}, u'esi': {u'sample_value': 0, u'status': u'inactive'}, u'em2_32768': {u'sample_value': 0, u'status': u'inactive'}, u'jsrv_1': {u'sample_value': 0, u'status': u'inactive'}}\", \"timestamp\": 1523033019000, \"entityType\": \"network_device\", \"state\": \"active\", \"entityDetails\": {}, \"entityId\": \"core-rtr-p-02\", \"metaData\": {}}, \"kind\": \"Alarm\", \"spec\": {\"aggregationFunction\": \"average\", \"intervalDuration\": 60, \"severity\": \"warning\", \"module\": \"alarms\", \"intervalCount\": 1, \"metricType\": \"ifInUcastPkts\", \"name\": \"ping_in_unicast_packets\", \"eventRuleId\": \"f9e6102e-39b8-11e8-b8ce-0242ac120005\", \"mode\": \"alert\", \"intervalsWithException\": 1, \"threshold\": 300, \"comparisonFunction\": \"above\"}, \"apiVersion\": \"v1\"}",
-    "headers": {
-        "Accept": "*/*",
-        "Accept-Encoding": "gzip, deflate",
-        "Connection": "keep-alive",
-        "Content-Length": "3396",
-        "Content-Type": "application/json",
-        "Host": "192.168.128.174:5001",
-        "User-Agent": "python-requests/2.18.4"
-    }
-}
-salt/run/20180406164340760297/new       {
-    "_stamp": "2018-04-06T16:43:40.762533",
-    "fun": "runner.northstar.put_device_in_maintenance",
-    "fun_args": [
-        {
-            "dev": "core-rtr-p-02"
-        }
-    ],
-    "jid": "20180406164340760297",
-    "user": "Reactor"
-}
-...
-...
-...
-salt/run/20180406164340760297/ret       {
-    "_stamp": "2018-04-06T16:43:43.143082",
-    "fun": "runner.northstar.put_device_in_maintenance",
-    "fun_args": [
-        {
-            "dev": "core-rtr-p-02"
-        }
-    ],
-    "jid": "20180406164340760297",
-    "return": "done",
-    "success": true,
-    "user": "Reactor"
-}
-```
-## Verify on Northstar 
+## On Northstar 
 
 Then log in to the Northstar GUI and verify in the topology menu if the device core-rtr-p-02 is in maintenance. 
 ![Northstar_maintenance.png](resources/Northstar_maintenance.png)  
