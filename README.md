@@ -63,8 +63,7 @@
 
 
 ### SaltStack
-- Only the master is required, with a webhook engine. 
-    - if you also want to use SaltStack to interact with Junos devices then you also need to install at leat one minion, and proxies (one proxy process per Junos device). Again, this is not mandatory for this setup. Only the master is required, with a webhook engine   
+- A master with a webhook engine is required, and a minion as well. For simplicity purpose, they all live on the same server for this demo.  
 - The Salt master listens to webhooks 
 - The Salt master generates a ZMQ messages to the event bus when a webhook notification is received. The ZMQ message has a tag and data. The data structure is a dictionary, which contains information about the event.
 - The Salt reactor binds sls files to event tags. The reactor has a list of event tags to be matched, and each event tag has a list of reactor SLS files to be run. So these sls files define the SaltStack reactions.
@@ -495,7 +494,6 @@ $ sudo -s
 
 ## Install SaltStack master
 
-Only the master is required, with a webhook engine.  
 if you also want to use SaltStack to interract with Junos devices then you also need to install at least one minion, and proxies (one proxy process per Junos device). Again, this is not mandatory for this setup. Only the master is required, with a webhook engine   
 
 Check if SaltStack master is already installed
@@ -513,9 +511,9 @@ if SaltStack master was not already installed, then install it:
 $ sudo -s
 ```
 ```
-# wget -O - https://repo.saltstack.com/apt/ubuntu/16.04/amd64/archive/2018.3.2/SALTSTACK-GPG-KEY.pub | sudo apt-key add -
+# wget -O - https://repo.saltstack.com/apt/ubuntu/16.04/amd64/archive/2017.7.5/SALTSTACK-GPG-KEY.pub | sudo apt-key add -
 ```
-Add ```deb http://repo.saltstack.com/apt/ubuntu/16.04/amd64/archive/2018.3.2 xenial main``` in the file ```/etc/apt/sources.list.d/saltstack.list```
+Add ```deb http://repo.saltstack.com/apt/ubuntu/16.04/amd64/archive/2017.7.5 xenial main``` in the file ```/etc/apt/sources.list.d/saltstack.list```
 ```
 # touch /etc/apt/sources.list.d/saltstack.list
 ```
@@ -524,7 +522,7 @@ Add ```deb http://repo.saltstack.com/apt/ubuntu/16.04/amd64/archive/2018.3.2 xen
 ```
 ```
 # more /etc/apt/sources.list.d/saltstack.list
-deb http://repo.saltstack.com/apt/ubuntu/16.04/amd64/archive/2018.3.2 xenial main
+deb http://repo.saltstack.com/apt/ubuntu/16.04/amd64/archive/2017.7.5 xenial main
 ```
 ```
 # sudo apt-get update
@@ -534,17 +532,26 @@ deb http://repo.saltstack.com/apt/ubuntu/16.04/amd64/archive/2018.3.2 xenial mai
 ```
 Verify you installed properly SaltStack master 
 ```
-# salt --version
-salt 2018.3.2 (Oxygen)
-```
-```
 # salt-master --version
-salt-master 2018.3.2 (Oxygen)
+salt-master 2017.7.5 (Nitrogen)
 ```
+## Install SaltStack minion
+
+Install Salt minion
+```
+# sudo apt-get install salt-minion
+```
+Verify you installed properly SaltStack minion
+```
+# salt-minion --version
+salt-minion 2017.7.5 (Nitrogen)
+```
+
 
 ## Configure SaltStack
 
 - Configure SaltStack master
+- Configure SaltStack minion
 - Configure SaltStack pillars
 - Configure SaltStack runners 
 - Configure SaltStack webhook engine 
@@ -593,6 +600,59 @@ To check the status, you can run these commands:
 # tail -f /var/log/salt/master
 ```
 
+### Configure SaltSatck minion
+
+#### SaltStack minion configuration file
+
+Copy the minion configuration file in the file ```/etc/salt/minion```
+
+```
+cp network_anomalies_auto_remediation_with_appformix_northstar_saltstack/minion /etc/salt/minion
+more /etc/salt/minion
+```
+
+#### Restart the salt-minion service
+```
+# service salt-minion restart
+```
+
+#### Verify the salt-minion status
+
+To see the Salt processes:
+```
+# ps -ef | grep salt
+```
+To check the status:
+```
+# systemctl status salt-minion.service
+# service salt-minion status
+```
+#### Verify the keys
+
+You need to accept the minions/proxies public keys on the master.
+
+To list all public keys:
+```
+# salt-key -L
+```
+To accept a specified public key:
+```
+# salt-key -a saltstack_minion_id -y
+```
+Or, to accept all pending keys:
+```
+# salt-key -A -y
+```
+Verify master <-> minion communication
+
+Run this command to make sure the minion is up and responding to the master. This is not an ICMP ping.
+```
+# salt saltstack_minion_id test.ping
+```
+Run this additionnal test
+```
+# salt "saltstack_minion_id" cmd.run "pwd"
+```
 
 
 ### Configure SaltStack pillars
